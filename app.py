@@ -38,7 +38,7 @@ def upload():
         app.config['LAST_DATA'] = result
         return jsonify(result)
     except Exception as e:
-        return jsonify({"error": f"Apdorojimo klaida (galimas atminties limitas): {str(e)[:200]}"}), 500
+        return jsonify({"error": f"Apdorojimo klaida: {str(e)[:200]}"}), 500
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -57,7 +57,7 @@ def export_excel():
 
 @app.errorhandler(500)
 def internal_error(error):
-    return jsonify({"error": "Serverio klaida. Bandykite vieną mažesnį failą arba palaukite."}), 500
+    return jsonify({"error": "Serverio klaida. Bandykite mažesnį failą."}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
