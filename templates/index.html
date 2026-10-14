@@ -57,7 +57,14 @@ footer { text-align: center; padding: 1.5rem; color: #666; font-size: 0.8rem; }
     </div>
   </div>
 
-  <div class="loading" id="loading"><p>Analizuojama projekto duomenys... (gali užtrukti dideliems PDF)</p></div>
+  <div class="loading" id="loading">
+    <p id="loadingText">Analizuojama projekto duomenys...</p>
+    <div style="width:100%; max-width:420px; margin:1.2rem auto; background:#e0e0e0; border-radius:12px; overflow:hidden; height:22px;">
+      <div id="progressBar" style="width:0%; height:100%; background:linear-gradient(90deg,#2980b9,#1a5276); transition:width 0.4s;"></div>
+    </div>
+    <p id="progressPercent" style="font-size:1.3rem; font-weight:bold; margin:0.3rem 0;">0%</p>
+    <p id="progressTime" style="color:#666; font-size:0.95rem;">Apytikslis laikas: skaičiuojama...</p>
+  </div>
 
   <div id="results" style="display:none;">
     <div class="card">
@@ -139,10 +146,31 @@ uploadBtn.addEventListener('click', async () => {
   if (!selectedFiles.length) return;
   const formData = new FormData();
   selectedFiles.forEach(f => formData.append('files', f));
+
   loading.style.display = 'block';
   results.style.display = 'none';
   uploadBtn.disabled = true;
   exportBtn.disabled = true;
+
+  const progressBar = document.getElementById('progressBar');
+  const progressPercent = document.getElementById('progressPercent');
+  const progressTime = document.getElementById('progressTime');
+  const loadingText = document.getElementById('loadingText');
+
+  let progress = 0;
+  const interval = setInterval(() => {
+    if (progress < 92) {
+      progress += Math.random() * 6 + 1;
+      if (progress > 92) progress = 92;
+      progressBar.style.width = progress + '%';
+      progressPercent.textContent = Math.round(progress) + '%';
+      const remaining = Math.max(8, Math.round((100 - progress) * 0.8));
+      progressTime.textContent = `Apytikslis likęs laikas: ~${remaining} sek.`;
+      if (progress > 40) loadingText.textContent = 'Skaitomi dokumentai ir lentelės...';
+      if (progress > 70) loadingText.textContent = 'Formuojama medžiagų specifikacija...';
+    }
+  }, 700);
+
   try {
     const res = await fetch('/upload', { method: 'POST', body: formData });
     const data = await res.json();
@@ -152,7 +180,12 @@ uploadBtn.addEventListener('click', async () => {
   } catch (e) {
     alert('Klaida: ' + e.message);
   } finally {
-    loading.style.display = 'none';
+    clearInterval(interval);
+    progressBar.style.width = '100%';
+    progressPercent.textContent = '100%';
+    progressTime.textContent = 'Baigta!';
+    loadingText.textContent = 'Analizė baigta';
+    setTimeout(() => { loading.style.display = 'none'; }, 600);
     uploadBtn.disabled = false;
   }
 });
