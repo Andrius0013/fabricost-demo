@@ -8,7 +8,7 @@ from collections import defaultdict
 import pdfplumber
 import pandas as pd
 
-PAGE_LIMIT = 35  # Sumažinta dėl atminties
+PAGE_LIMIT = 12  # Labai sumažinta dėl atminties
 
 def extract_from_pdf(path, max_pages=PAGE_LIMIT):
     items = []
@@ -19,18 +19,17 @@ def extract_from_pdf(path, max_pages=PAGE_LIMIT):
             for i in range(pages_to_read):
                 page = pdf.pages[i]
                 text = page.extract_text() or ""
-                # Projekto pavadinimas
                 if not project_name:
-                    m = re.search(r'(SANDĖLIO|STOGO|KONSTRUKCIJ|TDP|SK\.|JUTA)', text, re.I)
-                    if m:
+                    if re.search(r'(SANDĖLIO|STOGO|KONSTRUKCIJ|TDP|SK\.|JUTA)', text, re.I):
                         project_name = "02. SANDĖLIO PASTATAS – Stogo konstrukcijos"
-                # Elementų eilutės (pvz. x28 PL20*500)
                 for line in text.splitlines():
                     line = line.strip()
+                    if len(line) < 5:
+                        continue
                     if re.search(r'\bx\d+\s+[A-Z0-9*\.]+', line) or re.search(r'\b(PL|IPE|HEA|HEB|UPN|L|RHS)\d', line, re.I):
                         items.append({
                             "pozicija": "",
-                            "profilis": line[:80],
+                            "profilis": line[:100],
                             "medžiaga": "",
                             "ilgis": "",
                             "kiekis": "",
@@ -40,23 +39,22 @@ def extract_from_pdf(path, max_pages=PAGE_LIMIT):
                             "tipas": "PDF",
                             "needs_review": True
                         })
-                # Lentelės
                 tables = page.extract_tables() or []
-                for table in tables:
-                    for row in table:
+                for table in tables[:3]:  # max 3 lentelės per puslapį
+                    for row in table[:20]:  # max 20 eilučių
                         if not row or not any(row):
                             continue
                         row_str = " ".join([str(c or "") for c in row])
                         if re.search(r'(Poz|Profil|Medžiag|Kiek|Ilg|Svor|Mas)', row_str, re.I):
-                            continue  # antraštė
+                            continue
                         if any(c and str(c).strip() for c in row):
                             items.append({
-                                "pozicija": str(row[0] or "")[:30] if len(row) > 0 else "",
-                                "profilis": str(row[1] or "")[:60] if len(row) > 1 else "",
-                                "medžiaga": str(row[2] or "")[:30] if len(row) > 2 else "",
-                                "ilgis": str(row[3] or "")[:20] if len(row) > 3 else "",
-                                "kiekis": str(row[4] or "")[:20] if len(row) > 4 else "",
-                                "masė": str(row[5] or "")[:20] if len(row) > 5 else "",
+                                "pozicija": str(row[0] or "")[:40] if len(row) > 0 else "",
+                                "profilis": str(row[1] or "")[:80] if len(row) > 1 else "",
+                                "medžiaga": str(row[2] or "")[:40] if len(row) > 2 else "",
+                                "ilgis": str(row[3] or "")[:30] if len(row) > 3 else "",
+                                "kiekis": str(row[4] or "")[:30] if len(row) > 4 else "",
+                                "masė": str(row[5] or "")[:30] if len(row) > 5 else "",
                                 "dažomas_plotas": "",
                                 "šaltinis": f"{Path(path).name} | psl. {i+1} | lentelė",
                                 "tipas": "PDF lentelė",
@@ -65,7 +63,7 @@ def extract_from_pdf(path, max_pages=PAGE_LIMIT):
     except Exception as e:
         items.append({
             "pozicija": "",
-            "profilis": f"Klaida skaitant PDF: {str(e)[:100]}",
+            "profilis": f"Klaida: {str(e)[:80]}",
             "medžiaga": "",
             "ilgis": "",
             "kiekis": "",
@@ -93,7 +91,7 @@ def process_files(file_paths):
         else:
             all_items.append({
                 "pozicija": "",
-                "profilis": f"Formatas {ext} kol kas apdorojamas ribotai",
+                "profilis": f"Formatas {ext} ribotai",
                 "medžiaga": "",
                 "ilgis": "",
                 "kiekis": "",
@@ -103,19 +101,12 @@ def process_files(file_paths):
                 "tipas": "Kitas",
                 "needs_review": True
             })
-    # Paprastas konfliktų žymėjimas
+    # Konfliktų žymėjimas
     seen = defaultdict(list)
     for it in all_items:
-        key = (it.get("profilis", "")[:40], it.get("kiekis", ""))
+        key = (it.get("profilis", "")[:50], it.get("kiekis", ""))
         seen[key].append(it)
     for group in seen.values():
         if len(group) > 1:
             for it in group:
-                it["needs_review"] = True
-    return {
-        "projektas": project_name or "Nenustatytas",
-        "medžiagos": all_items[:500],  # limitas
-        "total": len(all_items),
-        "operacijos": ["Suvirinimas", "Dažymas"] if any(i.get("profilis") for i in all_items) else [],
-        "failai": files_processed
-    }
+                it["needs_review"]
