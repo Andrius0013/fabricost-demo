@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FabriCost PRO DEMO – Projekto analizė</title>
+<style>
+:root { --primary: #1a5276; --accent: #2980b9; --success: #27ae60; --warning: #f39c12; --bg: #f4f7f9; }
+* { box-sizing: border-box; }
+body { font-family: 'Segoe UI', system-ui, Arial, sans-serif; margin: 0; background: var(--bg); color: #222; }
+header { background: linear-gradient(135deg, var(--primary), #154360); color: white; padding: 1.8rem 2rem; }
+header h1 { margin: 0; font-size: 2rem; }
+header p { margin: 0.4rem 0 0; opacity: 0.9; }
+.container { max-width: 1200px; margin: 1.5rem auto; padding: 0 1rem; }
+.card { background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.2rem; box-shadow: 0 2px 10px rgba(0,0,0,0.07); }
+.upload-area { border: 2px dashed var(--accent); border-radius: 12px; padding: 2.5rem; text-align: center; background: #f8fbff; cursor: pointer; transition: 0.2s; }
+.upload-area:hover, .upload-area.dragover { background: #e3f2fd; border-color: var(--primary); }
+.upload-area input { display: none; }
+.btn { background: var(--accent); color: white; border: none; padding: 0.75rem 1.4rem; border-radius: 8px; cursor: pointer; font-size: 1rem; margin: 0.3rem; }
+.btn:hover { background: var(--primary); }
+.btn-success { background: var(--success); }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+table { width: 100%; border-collapse: collapse; margin-top: 0.8rem; font-size: 0.88rem; }
+th, td { border: 1px solid #e0e0e0; padding: 7px 8px; text-align: left; }
+th { background: var(--primary); color: white; position: sticky; top: 0; }
+tr.warning { background: #fff8e1; }
+.badge { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 0.72rem; margin-left: 4px; }
+.badge-doc { background: #d5f5e3; color: #1e8449; }
+.badge-ocr { background: #fdebd0; color: #b9770e; }
+.loading { display: none; text-align: center; padding: 2rem; }
+.stats { display: flex; gap: 1rem; flex-wrap: wrap; margin: 0.5rem 0; }
+.stat { background: #f0f7ff; padding: 0.6rem 1rem; border-radius: 8px; font-weight: 600; }
+.features { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.8rem; }
+.feature { background: #f8fbff; padding: 0.9rem; border-radius: 8px; border-left: 4px solid var(--accent); }
+footer { text-align: center; padding: 1.5rem; color: #666; font-size: 0.8rem; }
+@media (max-width: 700px) { table { font-size: 0.75rem; } th, td { padding: 4px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>FabriCost PRO DEMO</h1>
+  <p>Įkelkite projekto failus (PDF, Excel, Word, nuotraukas, DXF, ZIP) ir gaukite medžiagų specifikaciją</p>
+</header>
+<div class="container">
+  <div class="card">
+    <h2>1. Projekto įkėlimas</h2>
+    <p>Palaikomi formatai: PDF (tekstas + lentelės + OCR), Excel, CSV/TSV, Word, TXT, RTF, ODT, ODS, JPG/PNG/TIFF/BMP, DXF, ZIP.</p>
+    <div class="upload-area" id="dropzone">
+      <p><strong>Vilkkite failus čia arba spustelėkite pasirinkti</strong></p>
+      <p style="color:#555; font-size:0.9rem;">Galite įkelti kelis failus vienu metu. Dideliems PDF (200+ psl.) apdorojama iki 50 psl.</p>
+      <input type="file" id="fileInput" multiple accept=".pdf,.xlsx,.xls,.csv,.tsv,.docx,.doc,.txt,.rtf,.odt,.ods,.jpg,.jpeg,.png,.tiff,.tif,.bmp,.dxf,.zip">
+    </div>
+    <div style="margin-top:1rem;">
+      <button class="btn" id="uploadBtn" disabled>Analizuoti projektą</button>
+      <button class="btn btn-success" id="exportBtn" disabled onclick="exportExcel()">Eksportuoti į Excel</button>
+      <span id="fileList" style="margin-left:1rem; color:#555; font-size:0.9rem;"></span>
+    </div>
+  </div>
+
+  <div class="loading" id="loading"><p>Analizuojama projekto duomenys... (gali užtrukti dideliems PDF)</p></div>
+
+  <div id="results" style="display:none;">
+    <div class="card">
+      <h2>2. Projekto rezultatai</h2>
+      <div class="stats">
+        <div class="stat" id="projectName">–</div>
+        <div class="stat" id="countStat">Įrašų: 0</div>
+        <div class="stat" id="opsStat">Operacijos: –</div>
+      </div>
+      <p id="fileInfo" style="color:#555; font-size:0.9rem;"></p>
+    </div>
+    <div class="card">
+      <h2>Medžiagų specifikacija</h2>
+      <div style="overflow-x:auto; max-height:600px;">
+        <table id="materialsTable">
+          <thead>
+            <tr>
+              <th>Pozicija</th><th>Profilis / Aprašymas</th><th>Medžiaga</th><th>Ilgis</th>
+              <th>Kiekis</th><th>Masė (kg)</th><th>Daž. plotas</th><th>Šaltinis</th><th>Pastaba</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <h2>3. DEMO funkcijos</h2>
+      <div class="features">
+        <div class="feature"><strong>Technologijos analizė</strong><br>Profiliai ir operacijos atpažintos iš dokumentų</div>
+        <div class="feature"><strong>Medžiagų specifikacija</strong><br>Su šaltiniais, konfliktų žymėjimu</div>
+        <div class="feature"><strong>Masė ir dažomas plotas</strong><br>Skaičiuojama kai duomenys pilni</div>
+        <div class="feature"><strong>Savikainos skaičiavimas</strong><br>Reikia papildyti kainų ir darbo normas</div>
+      </div>
+      <p style="margin-top:1rem; color:#c0392b;"><strong>Trūkstami laukai:</strong> pilna masė, darbo valandų normos, marža, medžiagų kainos.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Kodėl šis DEMO?</h2>
+    <div class="features">
+      <div class="feature">Multi-formato importas su šaltinių sekimu</div>
+      <div class="feature">Lentelių ir elementų eilučių ištraukimas iš PDF brėžinių</div>
+      <div class="feature">OCR skenuotiems dokumentams (patvirtinimui)</div>
+      <div class="feature">Konfliktų žymėjimas – nesumuojama aklai</div>
+      <div class="feature">Excel eksportas medžiagų specifikacijos</div>
+      <div class="feature">Nėra išgalvotų duomenų</div>
+    </div>
+  </div>
+</div>
+<footer>FabriCost PRO DEMO | Bazinis importas be mokamo API | 2026 | Įkelti failai apdorojami laikinai ir neišsaugomi</footer>
+
+<script>
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const uploadBtn = document.getElementById('uploadBtn');
+const exportBtn = document.getElementById('exportBtn');
+const fileList = document.getElementById('fileList');
+const loading = document.getElementById('loading');
+const results = document.getElementById('results');
+
+let selectedFiles = [];
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault(); dropzone.classList.remove('dragover');
+  handleFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+
+function handleFiles(files) {
+  selectedFiles = Array.from(files);
+  uploadBtn.disabled = selectedFiles.length === 0;
+  fileList.textContent = selectedFiles.length ? `${selectedFiles.length} failas(-ai)` : '';
+}
+
+uploadBtn.addEventListener('click', async () => {
+  if (!selectedFiles.length) return;
+  const formData = new FormData();
+  selectedFiles.forEach(f => formData.append('files', f));
+  loading.style.display = 'block';
+  results.style.display = 'none';
+  uploadBtn.disabled = true;
+  exportBtn.disabled = true;
+  try {
+    const res = await fetch('/upload', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.error) { alert('Klaida: ' + data.error); return; }
+    showResults(data);
+    exportBtn.disabled = false;
+  } catch (e) {
+    alert('Klaida: ' + e.message);
+  } finally {
+    loading.style.display = 'none';
+    uploadBtn.disabled = false;
+  }
+});
+
+function showResults(data) {
+  document.getElementById('projectName').textContent = data.projektas || 'Nenustatytas';
+  document.getElementById('countStat').textContent = `Įrašų: ${data.total || data.medžiagos.length}`;
+  document.getElementById('opsStat').textContent = `Operacijos: ${data.operacijos.length ? data.operacijos.join(', ') : '–'}`;
+  document.getElementById('fileInfo').textContent = 'Įkelti failai: ' + (data.failai || []).join(', ');
+  const tbody = document.querySelector('#materialsTable tbody');
+  tbody.innerHTML = '';
+  (data.medžiagos || []).forEach(m => {
+    const tr = document.createElement('tr');
+    if (m.needs_review) tr.className = 'warning';
+    const badge = (m.tipas || '').includes('OCR') || m.needs_review ? '<span class="badge badge-ocr">OCR/Peržiūra</span>' : '<span class="badge badge-doc">Dok.</span>';
+    tr.innerHTML = `
+      <td>${m.pozicija ?? '-'}</td>
+      <td>${m.profilis || '-'}</td>
+      <td>${m.medžiaga ?? '-'}</td>
+      <td>${m.ilgis ?? '-'}</td>
+      <td>${m.kiekis ?? '-'}</td>
+      <td>${m.masė ?? '-'}</td>
+      <td>${m.dažomas_plotas ?? '-'}</td>
+      <td style="font-size:0.75rem; max-width:200px; word-break:break-all;">${m.šaltinis || ''}</td>
+      <td>${m.needs_review ? 'Peržiūrėti' : ''} ${badge}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  results.style.display = 'block';
+  results.scrollIntoView({ behavior: 'smooth' });
+}
+
+function exportExcel() {
+  window.location.href = '/export_excel';
+}
+</script>
+</body>
+</html>
