@@ -11,7 +11,7 @@ from io import BytesIO
 from datetime import datetime
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB
+app.config['MAX_CONTENT_LENGTH'] = 80 * 1024 * 1024
 
 @app.route('/')
 def index():
@@ -35,11 +35,10 @@ def upload():
                 f.save(path)
                 paths.append(path)
         result = process_files(paths)
-        # Išsaugome eksportui
         app.config['LAST_DATA'] = result
         return jsonify(result)
     except Exception as e:
-        return jsonify({"error": f"Apdorojimo klaida: {str(e)[:300]}"}), 500
+        return jsonify({"error": f"Apdorojimo klaida (galimas atminties limitas): {str(e)[:200]}"}), 500
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -47,7 +46,7 @@ def upload():
 def export_excel():
     data = app.config.get('LAST_DATA')
     if not data or not data.get('medžiagos'):
-        return jsonify({"error": "Nėra duomenų eksportui. Pirmiausia įkelkite projektą."}), 400
+        return jsonify({"error": "Nėra duomenų. Pirmiausia analizuokite projektą."}), 400
     df = pd.DataFrame(data['medžiagos'])
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -55,6 +54,10 @@ def export_excel():
     output.seek(0)
     filename = f"medziagu_specifikacija_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
     return send_file(output, download_name=filename, as_attachment=True)
+
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({"error": "Serverio klaida. Bandykite vieną mažesnį failą arba palaukite."}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
