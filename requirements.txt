@@ -1,10 +1,6 @@
-flask>=3.0
+flask
+gunicorn
+pdfplumber
 pandas
 openpyxl
-pdfplumber
-pytesseract
-pillow
 python-docx
-ezdxf
-pdf2image
-gunicorn
