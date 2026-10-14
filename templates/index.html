@@ -140,9 +140,7 @@ function handleFiles(files) {
   selectedFiles = Array.from(files);
   uploadBtn.disabled = selectedFiles.length === 0;
   fileList.textContent = selectedFiles.length ? `${selectedFiles.length} failas(-ai)` : '';
-}
-
-uploadBtn.addEventListener('click', async () => {
+}uploadBtn.addEventListener('click', async () => {
   if (!selectedFiles.length) return;
   const formData = new FormData();
   selectedFiles.forEach(f => formData.append('files', f));
@@ -159,22 +157,27 @@ uploadBtn.addEventListener('click', async () => {
 
   let progress = 0;
   const interval = setInterval(() => {
-    if (progress < 92) {
-      progress += Math.random() * 6 + 1;
-      if (progress > 92) progress = 92;
+    if (progress < 90) {
+      progress += Math.random() * 5 + 1;
+      if (progress > 90) progress = 90;
       progressBar.style.width = progress + '%';
       progressPercent.textContent = Math.round(progress) + '%';
-      const remaining = Math.max(8, Math.round((100 - progress) * 0.8));
-      progressTime.textContent = `Apytikslis likęs laikas: ~${remaining} sek.`;
-      if (progress > 40) loadingText.textContent = 'Skaitomi dokumentai ir lentelės...';
-      if (progress > 70) loadingText.textContent = 'Formuojama medžiagų specifikacija...';
+      progressTime.textContent = `Apytikslis likęs laikas: \~${Math.max(5, Math.round((100-progress)*0.6))} sek.`;
     }
-  }, 700);
+  }, 600);
 
   try {
     const res = await fetch('/upload', { method: 'POST', body: formData });
-    const data = await res.json();
-    if (data.error) { alert('Klaida: ' + data.error); return; }
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      throw new Error('Serveris grąžino ne JSON (galimas atminties limitas arba timeout). Bandykite mažesnį failą.');
+    }
+    if (!res.ok || data.error) {
+      throw new Error(data.error || 'Serverio klaida');
+    }
     showResults(data);
     exportBtn.disabled = false;
   } catch (e) {
@@ -183,44 +186,10 @@ uploadBtn.addEventListener('click', async () => {
     clearInterval(interval);
     progressBar.style.width = '100%';
     progressPercent.textContent = '100%';
-    progressTime.textContent = 'Baigta!';
-    loadingText.textContent = 'Analizė baigta';
-    setTimeout(() => { loading.style.display = 'none'; }, 600);
+    progressTime.textContent = 'Baigta';
+    setTimeout(() => { loading.style.display = 'none'; }, 500);
     uploadBtn.disabled = false;
   }
 });
 
-function showResults(data) {
-  document.getElementById('projectName').textContent = data.projektas || 'Nenustatytas';
-  document.getElementById('countStat').textContent = `Įrašų: ${data.total || data.medžiagos.length}`;
-  document.getElementById('opsStat').textContent = `Operacijos: ${data.operacijos.length ? data.operacijos.join(', ') : '–'}`;
-  document.getElementById('fileInfo').textContent = 'Įkelti failai: ' + (data.failai || []).join(', ');
-  const tbody = document.querySelector('#materialsTable tbody');
-  tbody.innerHTML = '';
-  (data.medžiagos || []).forEach(m => {
-    const tr = document.createElement('tr');
-    if (m.needs_review) tr.className = 'warning';
-    const badge = (m.tipas || '').includes('OCR') || m.needs_review ? '<span class="badge badge-ocr">OCR/Peržiūra</span>' : '<span class="badge badge-doc">Dok.</span>';
-    tr.innerHTML = `
-      <td>${m.pozicija ?? '-'}</td>
-      <td>${m.profilis || '-'}</td>
-      <td>${m.medžiaga ?? '-'}</td>
-      <td>${m.ilgis ?? '-'}</td>
-      <td>${m.kiekis ?? '-'}</td>
-      <td>${m.masė ?? '-'}</td>
-      <td>${m.dažomas_plotas ?? '-'}</td>
-      <td style="font-size:0.75rem; max-width:200px; word-break:break-all;">${m.šaltinis || ''}</td>
-      <td>${m.needs_review ? 'Peržiūrėti' : ''} ${badge}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-  results.style.display = 'block';
-  results.scrollIntoView({ behavior: 'smooth' });
-}
-
-function exportExcel() {
-  window.location.href = '/export_excel';
-}
-</script>
-</body>
-</html>
+      
