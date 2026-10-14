@@ -3,14 +3,15 @@ from flask import Flask, render_template, request, jsonify, send_file
 import os
 import tempfile
 import shutil
+import re
 from pathlib import Path
-from import_project import process_file, parse_for_materials
+from import_project import process_files
 import pandas as pd
 from io import BytesIO
 from datetime import datetime
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 300 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB
 
 @app.route('/')
 def index():
@@ -19,35 +20,26 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload():
     if 'files' not in request.files:
-        return jsonify({'error': 'Nėra failų'}), 400
+        return jsonify({"error": "Nėra failų"}), 400
     files = request.files.getlist('files')
-    if not files or not files[0].filename:
-        return jsonify({'error': 'Nepasirinkti failai'}), 400
+    if not files or all(f.filename == '' for f in files):
+        return jsonify({"error": "Nepasirinkti failai"}), 400
 
     temp_dir = tempfile.mkdtemp()
+    paths = []
     try:
-        saved = []
         for f in files:
             if f.filename:
-                p = os.path.join(temp_dir, Path(f.filename).name)
-                f.save(p)
-                saved.append(p)
-        all_results = []
-        for fp in saved:
-            all_results.extend(process_file(fp))
-        parsed = parse_for_materials(all_results)
-        clean = {
-            'projektas': parsed.get('projektas', 'Nenustatytas'),
-            'medžiagos': parsed.get('medžiagos', []),
-            'operacijos': parsed.get('operacijos', []),
-            'failai': [Path(f).name for f in saved],
-            'total': len(parsed.get('medžiagos', []))
-        }
-        # Store for export (simple in-memory for demo)
-        app.config['LAST_DATA'] = clean
-        return jsonify(clean)
+                safe_name = re.sub(r'[^\w\.\-]', '_', f.filename)
+                path = os.path.join(temp_dir, safe_name)
+                f.save(path)
+                paths.append(path)
+        result = process_files(paths)
+        # Išsaugome eksportui
+        app.config['LAST_DATA'] = result
+        return jsonify(result)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": f"Apdorojimo klaida: {str(e)[:300]}"}), 500
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -55,25 +47,15 @@ def upload():
 def export_excel():
     data = app.config.get('LAST_DATA')
     if not data or not data.get('medžiagos'):
-        return jsonify({'error': 'Nėra duomenų eksportui. Pirmiausia įkelkite projektą.'}), 400
+        return jsonify({"error": "Nėra duomenų eksportui. Pirmiausia įkelkite projektą."}), 400
     df = pd.DataFrame(data['medžiagos'])
-    # Clean columns
-    cols = ['pozicija', 'profilis', 'medžiaga', 'ilgis', 'kiekis', 'masė', 'dažomas_plotas', 'kaina', 'šaltinis', 'tipas', 'needs_review']
-    df = df.reindex(columns=[c for c in cols if c in df.columns])
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Medžiagų specifikacija')
-        # Summary sheet
-        summary = pd.DataFrame({
-            'Rodiklis': ['Projekto pavadinimas', 'Įrašų skaičius', 'Operacijos', 'Generavimo data'],
-            'Reikšmė': [data.get('projektas'), len(data['medžiagos']), ', '.join(data.get('operacijos', [])), datetime.now().strftime('%Y-%m-%d %H:%M')]
-        })
-        summary.to_excel(writer, index=False, sheet_name='Santrauka')
     output.seek(0)
-    return send_file(output, download_name=f"Medziagu_specifikacija_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-                     as_attachment=True, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    filename = f"medziagu_specifikacija_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+    return send_file(output, download_name=filename, as_attachment=True)
 
 if __name__ == '__main__':
-    import os
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
