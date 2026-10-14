@@ -11,7 +11,7 @@ from io import BytesIO
 from datetime import datetime
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 80 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
 @app.route('/')
 def index():
@@ -37,8 +37,10 @@ def upload():
         result = process_files(paths)
         app.config['LAST_DATA'] = result
         return jsonify(result)
+    except MemoryError:
+        return jsonify({"error": "Per mažai atminties. Bandykite mažesnį failą arba mažiau puslapių."}), 500
     except Exception as e:
-        return jsonify({"error": f"Apdorojimo klaida: {str(e)[:200]}"}), 500
+        return jsonify({"error": f"Klaida: {str(e)[:150]}"}), 500
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
