@@ -4,14 +4,13 @@ import os
 import tempfile
 import shutil
 import re
-from pathlib import Path
 from import_project import process_files
 import pandas as pd
 from io import BytesIO
 from datetime import datetime
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 60 * 1024 * 1024
 
 @app.route('/')
 def index():
@@ -21,8 +20,9 @@ def index():
 def upload():
     if 'files' not in request.files:
         return jsonify({"error": "Nėra failų"}), 400
+
     files = request.files.getlist('files')
-    if not files or all(f.filename == '' for f in files):
+    if not files or all(not f.filename for f in files):
         return jsonify({"error": "Nepasirinkti failai"}), 400
 
     temp_dir = tempfile.mkdtemp()
@@ -30,17 +30,16 @@ def upload():
     try:
         for f in files:
             if f.filename:
-                safe_name = re.sub(r'[^\w\.\-]', '_', f.filename)
-                path = os.path.join(temp_dir, safe_name)
-                f.save(path)
-                paths.append(path)
+                safe = re.sub(r'[^\w\.\-]', '_', f.filename)
+                p = os.path.join(temp_dir, safe)
+                f.save(p)
+                paths.append(p)
+
         result = process_files(paths)
         app.config['LAST_DATA'] = result
         return jsonify(result)
-    except MemoryError:
-        return jsonify({"error": "Per mažai atminties. Bandykite mažesnį failą arba mažiau puslapių."}), 500
     except Exception as e:
-        return jsonify({"error": f"Klaida: {str(e)[:150]}"}), 500
+        return jsonify({"error": f"Apdorojimo klaida: {str(e)[:180]}"}), 500
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -48,19 +47,14 @@ def upload():
 def export_excel():
     data = app.config.get('LAST_DATA')
     if not data or not data.get('medžiagos'):
-        return jsonify({"error": "Nėra duomenų. Pirmiausia analizuokite projektą."}), 400
+        return jsonify({"error": "Nėra duomenų eksportui"}), 400
     df = pd.DataFrame(data['medžiagos'])
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Medžiagų specifikacija')
-    output.seek(0)
-    filename = f"medziagu_specifikacija_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
-    return send_file(output, download_name=filename, as_attachment=True)
-
-@app.errorhandler(500)
-def internal_error(error):
-    return jsonify({"error": "Serverio klaida. Bandykite mažesnį failą."}), 500
+    out = BytesIO()
+    with pd.ExcelWriter(out, engine='openpyxl') as w:
+        df.to_excel(w, index=False, sheet_name='Medžiagų specifikacija')
+    out.seek(0)
+    return send_file(out, download_name=f"specifikacija_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx", as_attachment=True)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(host='0.0.0.0', port=port)
